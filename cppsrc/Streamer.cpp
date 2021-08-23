@@ -1,5 +1,4 @@
 #include <util/platform.h>
-#include <iostream>
 #include <windows.h>
 #include "Streamer.h"
 #include "napi.h"
@@ -7,7 +6,7 @@
 
 constexpr char ModulePath [] = {"D:/Projects/obs-studio-master/obs-studio/libobs/data/"};
 constexpr char DataPath [] = {"D:/Projects/obs-studio-master/obs-studio/libobs/data"};
-constexpr char ObsBasePath [] = {"D:/Projects/obs-studio-master/obs-studio/build\rundir/Debug"};
+constexpr char ObsBasePath [] = {"D:/Projects/obs-studio-master/obs-studio/build/rundir/Debug"};
 constexpr char GraphicsModule [] = {"D:/Projects/demo_NNM/build/Debug/libobs-opengl.dll"};
 constexpr char PluginPath [] = {"D:/Projects/obs-studio-master/obs-studio/build/rundir/Debug/obs-plugins/64bit"};
 
@@ -91,13 +90,30 @@ void Streamer::CreateEncoders(obs_video_info& ovi, obs_audio_info& oai)
 
 void Streamer::ShutdownOBS()
 {
+   obs_service_release(stream_service);
+
    obs_shutdown();
 }
 
 bool Streamer::ConnectStreamingService()
 {
-   stream_service = obs_service_create("rtmp_common", NULL, NULL, nullptr);
-   obs_service_release(stream_service);
+   stream_output = obs_output_create("rtmp_output", "adv_stream", nullptr, nullptr);
+
+   if (stream_output != nullptr)
+   {
+      obs_output_set_video_encoder(stream_output, video_encoder);
+      obs_output_set_audio_encoder(stream_output, audio_encoder, 0);
+
+      stream_service = obs_service_create("rtmp_common", NULL, NULL, nullptr);
+
+      if (stream_service != nullptr)
+      {
+         obs_output_set_service(stream_output, stream_service); /* if a stream */
+         obs_output_start(stream_output);
+
+         return true;
+      }
+   }
 
    return false;
 }
@@ -111,3 +127,4 @@ bool Streamer::Stream()
 
    return false;
 }
+
