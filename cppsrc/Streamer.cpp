@@ -3,6 +3,8 @@
 #include "Streamer.h"
 #include "napi.h"
 
+#include <iostream>
+using namespace std;
 
 constexpr char ModulePath [] = {"D:/Projects/obs-studio-master/obs-studio/libobs/data/"};
 constexpr char DataPath [] = {"D:/Projects/obs-studio-master/obs-studio/libobs/data"};
@@ -18,48 +20,49 @@ Streamer::Streamer(std::string key)
 
 void Streamer::Launch()
 {
-   if (InitializeOBS(ovi, oai))
+   if (InitializeOBS())
    {
-      LoadModules();
-
-      CreateEncoders(ovi, oai);
-
-      ConnectStreamingService();
-
-      Stream();
+      if (SetupAudioVideo())
+      {
+         if (ConnectTwitchService() && CreateStreamOutput())
+         {
+            StreamStart();
+         }
+      }
 
       ShutdownOBS();
    }
 }
 
-void Streamer::GetVideoSettings(obs_video_info& ovi)
+void Streamer::GetVideoSettings()
 {
    // Assume we're streaming the whole display
    ovi.adapter = 0;
-   ovi.fps_num = 30000;
-   ovi.fps_den = 1001;
+   ovi.fps_num = 30;
+   ovi.fps_den = 1;
    ovi.graphics_module = GraphicsModule;
-   ovi.output_format = VIDEO_FORMAT_NV12;
+   ovi.output_format = VIDEO_FORMAT_I420;
    ovi.base_width = GetSystemMetrics(SM_CXSCREEN);
    ovi.base_height = GetSystemMetrics(SM_CYSCREEN);
    ovi.output_width = 1920;
    ovi.output_height = 1080;
-   ovi.range = VIDEO_RANGE_PARTIAL;
+   ovi.colorspace = VIDEO_CS_DEFAULT,
+   ovi.range = VIDEO_RANGE_DEFAULT;
    ovi.scale_type = OBS_SCALE_BICUBIC;
 }
 
-void Streamer::GetAudioSettings(obs_audio_info& oai)
+void Streamer::GetAudioSettings()
 {
    oai.samples_per_sec = 48000;
    oai.speakers = SPEAKERS_STEREO;
 }
 
-bool Streamer::InitializeOBS(obs_video_info& ovi, obs_audio_info& oai)
+bool Streamer::InitializeOBS()
 {
    if (obs_startup("en-US", ObsBasePath, nullptr))
    {
-      GetVideoSettings(ovi);
-      GetAudioSettings(oai);
+      GetVideoSettings();
+      GetAudioSettings();
 
       obs_add_module_path(ModulePath, ModulePath);
       obs_add_module_path(DataPath, DataPath);
@@ -67,7 +70,9 @@ bool Streamer::InitializeOBS(obs_video_info& ovi, obs_audio_info& oai)
       obs_add_data_path(ModulePath);
       obs_add_data_path(PluginPath);
 
-      return obs_reset_audio(&oai) && OBS_VIDEO_SUCCESS == obs_reset_video(&ovi);
+      LoadModules();
+
+      return true;
    }
 
    return false;
@@ -79,37 +84,17 @@ void Streamer::LoadModules()
    obs_post_load_modules();
 }
 
-void Streamer::CreateEncoders(obs_video_info& ovi, obs_audio_info& oai)
+bool Streamer::SetupAudioVideo()
 {
-      video_encoder = obs_video_encoder_create("obs_x264", "x264", nullptr, nullptr);
-      audio_encoder = obs_audio_encoder_create("ffmpeg_aac", "aac", nullptr, 0, nullptr);
-
-      obs_encoder_set_video(video_encoder, obs_get_video());
-      obs_encoder_set_audio(audio_encoder, obs_get_audio());
-}
-
-void Streamer::ShutdownOBS()
-{
-   obs_service_release(stream_service);
-
-   obs_shutdown();
-}
-
-bool Streamer::ConnectStreamingService()
-{
-   stream_output = obs_output_create("rtmp_output", "adv_stream", nullptr, nullptr);
-
-   if (stream_output != nullptr)
+   if (obs_reset_audio(&oai) && OBS_VIDEO_SUCCESS == obs_reset_video(&ovi))
    {
-      obs_output_set_video_encoder(stream_output, video_encoder);
-      obs_output_set_audio_encoder(stream_output, audio_encoder, 0);
-
-      stream_service = obs_service_create("rtmp_common", NULL, NULL, nullptr);
-
-      if (stream_service != nullptr)
+      if (CreateSource())
       {
-         obs_output_set_service(stream_output, stream_service); /* if a stream */
-         obs_output_start(stream_output);
+         videoEncoder = obs_video_encoder_create("obs_x264", "", nullptr, nullptr);
+         obs_encoder_set_video(videoEncoder, obs_get_video());
+
+         audioEncoder = obs_audio_encoder_create("ffmpeg_aac", "aac", nullptr, 0, nullptr);
+         obs_encoder_set_audio(audioEncoder, obs_get_audio());
 
          return true;
       }
@@ -118,13 +103,74 @@ bool Streamer::ConnectStreamingService()
    return false;
 }
 
-bool Streamer::Stream()
+bool Streamer::CreateSource()
 {
-   if (!obs_output_active(stream_output))
+   videoSource = obs_source_create("monitor_capture", "", nullptr, nullptr);
+   audioSource = obs_source_create("wasapi_input_capture", "", nullptr, nullptr);
+
+   if (videoSource != nullptr && audioSource != nullptr)
    {
+      obs_set_output_source(0, videoSource);
+      obs_set_output_source(1, audioSource);
+
       return true;
    }
 
    return false;
+}
+
+void Streamer::ShutdownOBS()
+{
+   obs_service_release(streamService);
+
+   obs_shutdown();
+}
+
+bool Streamer::ConnectTwitchService()
+{
+   bool result = false;
+
+   auto data = obs_data_create();
+   obs_data_set_string(data, "service", "Twitch");
+   obs_data_set_string(data, "key", twitchKey.c_str());
+   obs_data_set_string(data, "server", "auto");
+
+   result = (streamService = obs_service_create("rtmp_common", "Twitch", data, nullptr)) != nullptr;
+
+   obs_data_release(data);
+
+   return result;
+}
+
+bool Streamer::CreateStreamOutput()
+{
+   if ((streamOutput = obs_output_create("rtmp_output", "", nullptr, nullptr)) != nullptr)
+   {
+      obs_output_set_video_encoder(streamOutput, videoEncoder);
+      obs_output_set_audio_encoder(streamOutput, audioEncoder, 0);
+      obs_output_set_service(streamOutput, streamService);
+
+      return true;
+   }
+
+   return false;
+}
+
+bool Streamer::StreamStart()
+{
+   if (obs_output_active(streamOutput))
+   {
+      obs_output_stop(streamOutput);
+   }
+
+   return obs_output_start(streamOutput);
+}
+
+void Streamer::StreamStop()
+{
+   if (obs_output_active(streamOutput))
+   {
+      obs_output_stop(streamOutput);
+   }
 }
 
