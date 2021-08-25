@@ -4,30 +4,6 @@
 #include <obs.h>
 #include <util/profiler.h>
 
-static const char* ftl_stream_getname([[maybe_unused]] void* unused)
-{
-   return "FTLStream";
-}
-
-static int CountVideoSources()
-{
-   int count = 0;
-   auto countSources = [](void* param, obs_source_t* source) 
-   {
-      if (!source)
-         return true;
-
-      uint32_t flags = obs_source_get_output_flags(source);
-      if ((flags & OBS_SOURCE_VIDEO) != 0)
-         (*reinterpret_cast<int*>(param))++;
-
-      return true;
-   };
-
-   obs_enum_sources(countSources, &count);
-   return count;
-}
-
 class Streamer
 {
 public:
