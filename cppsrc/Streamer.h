@@ -12,7 +12,8 @@ public:
    void GetVideoSettings();
    void GetAudioSettings();
    bool InitializeOBS();
-   void LoadModules();
+   bool LoadModules();
+   bool OpenAndInitModule(obs_module_t*& module, const std::string path);
    bool SetupAudioVideo();
    bool CreateSource();
    void ShutdownOBS();
