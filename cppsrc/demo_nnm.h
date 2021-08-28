@@ -15,6 +15,8 @@ class demo_nnm : public Napi::ObjectWrap<demo_nnm>
    private:
       static Napi::FunctionReference constructor;
       void Launch(const Napi::CallbackInfo& info);
+      void demo_nnm::StartStream(const Napi::CallbackInfo& info);
+      void demo_nnm::StopStream(const Napi::CallbackInfo& info);
       Streamer* streamer = nullptr;
 
 };

@@ -4,13 +4,14 @@
 #include "napi.h"
 
 #include <iostream>
+
 using namespace std;
 
-constexpr char ModulePath [] = {"D:/Projects/obs-studio-master/obs-studio/libobs/data/"};
 constexpr char DataPath [] = {"D:/Projects/obs-studio-master/obs-studio/libobs/data/"};
 constexpr char ObsBasePath [] = {"D:/Projects/obs-studio-master/obs-studio/build/rundir/Debug"};
 constexpr char GraphicsModule [] = {"D:/Projects/demo_NNM/build/Debug/libobs-opengl.dll"};
 constexpr char PluginPath [] = {"D:/Projects/obs-studio-master/obs-studio/build/rundir/Debug/obs-plugins/64bit/"};
+constexpr char TwitchService [] = {"rtmp://sjc05.contribute.live-video.net/app"};
 
 Streamer::Streamer(std::string key)
 {
@@ -29,10 +30,15 @@ void Streamer::Launch()
          }
       }
 
+      // Temporary until I get the external triggers set up.
+      // Stream for a short time and then stop.
+      int count = 0;
+      while (count++ < 50)
+      {
+         Sleep(500);
+      }
 
       StreamStop();
-
-      ShutdownOBS();
    }
 }
 
@@ -62,20 +68,14 @@ void Streamer::GetAudioSettings()
 
 bool Streamer::InitializeOBS()
 {
-   wchar_t* dll_path = L"D://Projects//obs-studio-master//obs-studio//build//rundir//Debug//bin//64bit";
-   auto result = SetDllDirectoryW(dll_path);
-
    if (obs_startup("en-US", ObsBasePath, nullptr))
    {
       GetVideoSettings();
       GetAudioSettings();
 
-      //obs_add_module_path(ModulePath, DataPath);
-      //obs_add_module_path(DataPath, DataPath);
       obs_add_module_path(PluginPath, DataPath);
       obs_add_module_path(ObsBasePath, nullptr);
       obs_add_data_path(DataPath);
-      //obs_add_data_path(PluginPath);
 
       return LoadModules();
    }
@@ -91,19 +91,16 @@ bool Streamer::LoadModules()
 
    auto rtmp_path = std::string(PluginPath) + "rtmp-services";
    auto outputs_path = std::string(PluginPath) + "obs-outputs";
-   auto ffmpeg_path = std::string("D:/Projects/obs-studio-master/obs-studio/build/rundir/Debug/bin/64bit/obs-ffmpeg");
+   auto ffmpeg_path = std::string(PluginPath) + "obs-ffmpeg";
 
    return OpenAndInitModule(rtmp_module, rtmp_path) &&
       OpenAndInitModule(ffmpeg_module, outputs_path) &&
       OpenAndInitModule(outputs_module, ffmpeg_path);
-
-   //obs_load_all_modules();
-   //obs_post_load_modules();
 }
 
-bool Streamer::OpenAndInitModule(obs_module_t*& module, const std::string path)
+bool Streamer::OpenAndInitModule(obs_module_t*& module, const std::string& path, const std::string& data_path)
 {
-   if (obs_open_module(&module, path.c_str(), nullptr) == MODULE_SUCCESS)
+   if (obs_open_module(&module, path.c_str(), data_path.c_str()) == MODULE_SUCCESS)
    {
       auto init_result = obs_init_module(module);
 
@@ -147,9 +144,10 @@ bool Streamer::CreateSource()
    obs_module_t* win_wasapi = nullptr;
 
    auto win_capture_path = std::string(PluginPath) + "win-capture";
+   auto win_capture_data_path = std::string("D:/Projects/obs-studio-master/obs-studio/build/rundir/Debug/data/obs-plugins/win-capture");
    auto win_wasapi_path = std::string(PluginPath) + "win-wasapi";
 
-   if (OpenAndInitModule(win_capture, win_capture_path) &&
+   if (OpenAndInitModule(win_capture, win_capture_path, win_capture_data_path) &&
       OpenAndInitModule(win_wasapi, win_wasapi_path))
    {
       videoSource = obs_source_create("monitor_capture", "", nullptr, nullptr);
@@ -181,7 +179,7 @@ bool Streamer::ConnectTwitchService()
    auto data = obs_data_create();
    obs_data_set_string(data, "service", "Twitch");
    obs_data_set_string(data, "key", twitchKey.c_str());
-   obs_data_set_string(data, "server", "auto");
+   obs_data_set_string(data, "server", TwitchService);  // "auto" isn't working; need to investigate
 
    result = (streamService = obs_service_create("rtmp_common", "Twitch", data, nullptr)) != nullptr;
 
@@ -204,21 +202,26 @@ bool Streamer::CreateStreamOutput()
    return false;
 }
 
-bool Streamer::StreamStart()
+void Streamer::StreamStart()
 {
-   if (obs_output_active(streamOutput))
+   if (streamOutput)
    {
-      obs_output_stop(streamOutput);
-   }
+      if (obs_output_active(streamOutput))
+      {
+         obs_output_stop(streamOutput);
+      }
 
-   return obs_output_start(streamOutput);
+      obs_output_start(streamOutput);
+   }
 }
 
 void Streamer::StreamStop()
 {
-   if (obs_output_active(streamOutput))
+   if (streamOutput)
    {
       obs_output_stop(streamOutput);
+      obs_output_release(streamOutput);
    }
-}
 
+   ShutdownOBS();
+}

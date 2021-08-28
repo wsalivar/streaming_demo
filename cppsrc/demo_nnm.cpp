@@ -53,6 +53,28 @@ void demo_nnm::Launch(const Napi::CallbackInfo& info)
    }
 }
 
+void demo_nnm::StartStream(const Napi::CallbackInfo& info)
+{
+   Napi::Env env = info.Env();
+   Napi::HandleScope scope(env);
+
+   if (streamer != nullptr)
+   {
+      streamer->StreamStart();
+   }
+}
+
+void demo_nnm::StopStream(const Napi::CallbackInfo& info)
+{
+   Napi::Env env = info.Env();
+   Napi::HandleScope scope(env);
+
+   if (streamer != nullptr)
+   {
+      streamer->StreamStop();
+   }
+}
+
 Streamer* demo_nnm::getStreamer()
 {
    return streamer;

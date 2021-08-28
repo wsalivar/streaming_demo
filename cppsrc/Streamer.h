@@ -13,13 +13,13 @@ public:
    void GetAudioSettings();
    bool InitializeOBS();
    bool LoadModules();
-   bool OpenAndInitModule(obs_module_t*& module, const std::string path);
+   bool OpenAndInitModule(obs_module_t*& module, const std::string& path, const std::string& data_path = "");
    bool SetupAudioVideo();
    bool CreateSource();
    void ShutdownOBS();
    bool ConnectTwitchService();
    bool CreateStreamOutput();
-   bool StreamStart();
+   void StreamStart();
    void StreamStop();
 
 protected:
