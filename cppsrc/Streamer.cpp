@@ -7,7 +7,8 @@
 
 using namespace std;
 
-constexpr char DataPath [] = {"D:/Projects/obs-studio-master/obs-studio/libobs/data/"};
+constexpr char EffectsPath [] = {"D:/Projects/obs-studio-master/obs-studio/libobs/data/"};
+constexpr char DataPath [] = {"D:/Projects/obs-studio-master/obs-studio/build/rundir/Debug/data/obs-plugins/"};
 constexpr char ObsBasePath [] = {"D:/Projects/obs-studio-master/obs-studio/build/rundir/Debug"};
 constexpr char GraphicsModule [] = {"D:/Projects/demo_NNM/build/Debug/libobs-opengl.dll"};
 constexpr char PluginPath [] = {"D:/Projects/obs-studio-master/obs-studio/build/rundir/Debug/obs-plugins/64bit/"};
@@ -33,7 +34,7 @@ void Streamer::Launch()
       // Temporary until I get the external triggers set up.
       // Stream for a short time and then stop.
       int count = 0;
-      while (count++ < 50)
+      while (count++ < 100)
       {
          Sleep(500);
       }
@@ -73,9 +74,9 @@ bool Streamer::InitializeOBS()
       GetVideoSettings();
       GetAudioSettings();
 
-      obs_add_module_path(PluginPath, DataPath);
+      obs_add_module_path(PluginPath, EffectsPath);
       obs_add_module_path(ObsBasePath, nullptr);
-      obs_add_data_path(DataPath);
+      obs_add_data_path(EffectsPath);
 
       return LoadModules();
    }
@@ -90,12 +91,17 @@ bool Streamer::LoadModules()
    obs_module_t* outputs_module = nullptr;
 
    auto rtmp_path = std::string(PluginPath) + "rtmp-services";
-   auto outputs_path = std::string(PluginPath) + "obs-outputs";
-   auto ffmpeg_path = std::string(PluginPath) + "obs-ffmpeg";
+   auto rtmp_data_path = std::string(DataPath) + "rtmp-services";
 
-   return OpenAndInitModule(rtmp_module, rtmp_path) &&
-      OpenAndInitModule(ffmpeg_module, outputs_path) &&
-      OpenAndInitModule(outputs_module, ffmpeg_path);
+   auto outputs_path = std::string(PluginPath) + "obs-outputs";
+   auto outputs_data_path = std::string(DataPath) + "obs-outputs";
+
+   auto ffmpeg_path = std::string(PluginPath) + "obs-ffmpeg";
+   auto ffmpeg_data_path = std::string(DataPath) + "obs-ffmpeg";
+
+   return OpenAndInitModule(rtmp_module, rtmp_path, rtmp_data_path) &&
+      OpenAndInitModule(ffmpeg_module, outputs_path, outputs_data_path) &&
+      OpenAndInitModule(outputs_module, ffmpeg_path, ffmpeg_data_path);
 }
 
 bool Streamer::OpenAndInitModule(obs_module_t*& module, const std::string& path, const std::string& data_path)
@@ -121,8 +127,9 @@ bool Streamer::SetupAudioVideo()
       {
          obs_module_t* obs_x264 = nullptr;
          auto obs_x264_path = std::string(PluginPath) + "obs-x264";
+         auto obs_x264_data_path = std::string(DataPath) + "obs-x264";
 
-         if (OpenAndInitModule(obs_x264, obs_x264_path))
+         if (OpenAndInitModule(obs_x264, obs_x264_path, obs_x264_data_path))
          {
             videoEncoder = obs_video_encoder_create("obs_x264", "", nullptr, nullptr);
             obs_encoder_set_video(videoEncoder, obs_get_video());
@@ -144,11 +151,13 @@ bool Streamer::CreateSource()
    obs_module_t* win_wasapi = nullptr;
 
    auto win_capture_path = std::string(PluginPath) + "win-capture";
-   auto win_capture_data_path = std::string("D:/Projects/obs-studio-master/obs-studio/build/rundir/Debug/data/obs-plugins/win-capture");
+   auto win_capture_data_path = std::string(DataPath) + "win-capture";
+
    auto win_wasapi_path = std::string(PluginPath) + "win-wasapi";
+   auto win_wasapi_data_path = std::string(DataPath) + "win-wasapi";
 
    if (OpenAndInitModule(win_capture, win_capture_path, win_capture_data_path) &&
-      OpenAndInitModule(win_wasapi, win_wasapi_path))
+      OpenAndInitModule(win_wasapi, win_wasapi_path, win_wasapi_data_path))
    {
       videoSource = obs_source_create("monitor_capture", "", nullptr, nullptr);
       audioSource = obs_source_create("wasapi_input_capture", "", nullptr, nullptr);
@@ -176,14 +185,14 @@ bool Streamer::ConnectTwitchService()
 {
    bool result = false;
 
-   auto data = obs_data_create();
-   obs_data_set_string(data, "service", "Twitch");
-   obs_data_set_string(data, "key", twitchKey.c_str());
-   obs_data_set_string(data, "server", TwitchService);  // "auto" isn't working; need to investigate
+   auto settings = obs_data_create();
+   obs_data_set_string(settings, "service", "Twitch");
+   obs_data_set_string(settings, "key", twitchKey.c_str());
+   obs_data_set_string(settings, "server", TwitchService);  // "auto" isn't working; need to investigate
 
-   result = (streamService = obs_service_create("rtmp_common", "Twitch", data, nullptr)) != nullptr;
+   result = (streamService = obs_service_create("rtmp_common", "Twitch", settings, nullptr)) != nullptr;
 
-   obs_data_release(data);
+   obs_data_release(settings);
 
    return result;
 }
