@@ -15,6 +15,7 @@
   "author": "",
   "license": "ISC",
   "devDependencies": {
+    "electron-rebuild": "^3.2.2",
     "node-gyp": "^8.2.0"
   },
   "dependencies": {
