@@ -1,6 +1,6 @@
 ## Simple native node module to stream the desktop to Twitch using OBS Studio API
 
-This is my first attempt at writing a napi module in C++ using OBS Software to stream content.  I learned some useful information along the way.
+This is my first attempt at writing a napi module in C++ using OBS Software to stream content.  I learned some useful information along the way regarding the importance of modules.
 
 ## Modules
 
